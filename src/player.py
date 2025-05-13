@@ -13,8 +13,6 @@ class Player:
         self.projectiles = []
         self.health = 100
         self.speed = 5
-        self.last_shot = 0
-        self.shoot_delay = 250  # 250ms entre disparos
         self.rayo_active = False
         self.rayo_timer = 0
         self.basura_count = 0
@@ -33,11 +31,9 @@ class Player:
             self.rect.bottom = SCREEN_HEIGHT
 
     def shoot(self):
-        now = pygame.time.get_ticks()
-        if now - self.last_shot > self.shoot_delay:
-            projectile = pygame.Rect(self.rect.right, self.rect.centery - 5, 10, 10)
-            self.projectiles.append(projectile)
-            self.last_shot = now
+        projectile = pygame.Rect(self.rect.right, self.rect.centery - 5, 10, 10)
+        self.projectiles.append(projectile)
+        return True
 
     def update_projectiles(self, screen):
         for proj in self.projectiles[:]:

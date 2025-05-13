@@ -47,6 +47,9 @@ nave_skins = [pygame.transform.scale(img, (64, 64)) for img in nave_skins]
 
 selected_skin_idx = 0  # Índice de skin seleccionada por defecto
 
+trofeo_img = pygame.image.load("assets/images/trofeo.png")
+trofeo_img = pygame.transform.scale(trofeo_img, (40, 40))
+
 def draw_text_center(screen, text, font, color, y_offset=0):
 	text_surface = font.render(text, True, color)
 	rect = text_surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + y_offset))
@@ -385,6 +388,76 @@ def draw_skin_selector(screen, current_idx):
     screen.blit(close_text, (close_rect.centerx-close_text.get_width()//2, close_rect.centery-close_text.get_height()//2))
     return skin_rects, close_rect
 
+def draw_pixel_trophy(screen, x, y, scale=2):
+    # Trofeo pixel art simple
+    color = (255, 215, 0)
+    pygame.draw.rect(screen, color, (x+2*scale, y+6*scale, 4*scale, 6*scale)) # base
+    pygame.draw.rect(screen, color, (x, y+2*scale, 8*scale, 6*scale)) # copa
+    pygame.draw.rect(screen, color, (x-2*scale, y+4*scale, 2*scale, 2*scale)) # asa izq
+    pygame.draw.rect(screen, color, (x+8*scale, y+4*scale, 2*scale, 2*scale)) # asa der
+    pygame.draw.rect(screen, (255,255,255), (x+2*scale, y+3*scale, scale, scale)) # brillo
+
+def mostrar_ranking_modal(screen, fondo_surface=None):
+    import csv
+    ranking = {"Fácil":[], "Normal":[], "Difícil":[]}
+    try:
+        with open("data/scores.csv", "r") as f:
+            for row in csv.reader(f):
+                if len(row) == 3:
+                    nombre, dificultad, puntaje = row
+                    puntaje = int(puntaje)
+                    if dificultad in ranking:
+                        ranking[dificultad].append((nombre, puntaje))
+    except FileNotFoundError:
+        pass
+    for key in ranking:
+        ranking[key].sort(key=lambda x: x[1], reverse=True)
+    clock = pygame.time.Clock()
+    salir = False
+    while not salir:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                mx, my = pygame.mouse.get_pos()
+                if cerrar_btn.collidepoint(mx, my):
+                    salir = True
+        # Fondo: si hay fondo_surface, usarlo, si no, negro
+        if fondo_surface:
+            screen.blit(fondo_surface, (0, 0))
+        else:
+            screen.fill((0, 0, 0))
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        overlay.set_alpha(180)
+        overlay.fill((0, 0, 0))
+        screen.blit(overlay, (0, 0))
+        win_w, win_h = 700, 400
+        win_x = (SCREEN_WIDTH - win_w) // 2
+        win_y = (SCREEN_HEIGHT - win_h) // 2
+        pygame.draw.rect(screen, (40, 40, 60), (win_x, win_y, win_w, win_h), border_radius=16)
+        pygame.draw.rect(screen, (255,255,255), (win_x, win_y, win_w, win_h), 3, border_radius=16)
+        titulo = FONT_TITLE.render("Ranking", True, (255,255,0))
+        screen.blit(titulo, (win_x + (win_w-titulo.get_width())//2, win_y+20))
+        col_w = win_w // 3
+        col_titles = ["Fácil", "Normal", "Difícil"]
+        for i, dificultad in enumerate(col_titles):
+            col_x = win_x + i*col_w
+            subt = FONT_UI.render(dificultad, True, (0,255,255))
+            screen.blit(subt, (col_x + (col_w-subt.get_width())//2, win_y+60))
+            for j, (nombre, puntaje) in enumerate(ranking[dificultad][:5], 1):
+                linea = FONT_SMALL.render(f"{j}. {nombre}: {puntaje}", True, (255,255,255))
+                screen.blit(linea, (col_x + 20, win_y+100 + (j-1)*28))
+            if i < 2:
+                pygame.draw.line(screen, (180,180,180), (col_x+col_w, win_y+50), (col_x+col_w, win_y+win_h-80), 3)
+        cerrar_btn = pygame.Rect(win_x+win_w//2-60, win_y+win_h-60, 120, 36)
+        pygame.draw.rect(screen, (180,0,0), cerrar_btn, border_radius=8)
+        pygame.draw.rect(screen, (0,0,0), cerrar_btn, 2, border_radius=8)
+        cerrar_txt = FONT_BUTTON.render("Cerrar", True, (255,255,255))
+        screen.blit(cerrar_txt, (cerrar_btn.centerx-cerrar_txt.get_width()//2, cerrar_btn.centery-cerrar_txt.get_height()//2))
+        pygame.display.flip()
+        clock.tick(60)
+
 def show_difficulty_menu(screen):
     global selected_skin_idx
     selected_mode = None
@@ -392,6 +465,7 @@ def show_difficulty_menu(screen):
     ia_submenu = False
     show_help = False
     show_skin_selector = False
+    show_ranking = False
     help_instructions = [
         "- Usa W/S o ↑/↓ para mover la nave",
         "- Dispara con click izquierdo",
@@ -405,6 +479,13 @@ def show_difficulty_menu(screen):
     while not selected_mode:
         screen.blit(bg, (0, 0))
         draw_gradient_title(screen, "Selecciona la dificultad o modo de IA", -40)
+        # Botón de ranking arriba a la izquierda
+        ranking_btn = pygame.Rect(20, 20, 140, 48)
+        pygame.draw.rect(screen, (255, 220, 40), ranking_btn, border_radius=12)
+        pygame.draw.rect(screen, (0,0,0), ranking_btn, 4, border_radius=12)
+        screen.blit(trofeo_img, (ranking_btn.x+8, ranking_btn.y+4))
+        ranking_txt = FONT_BUTTON.render("Ranking", True, (0,0,0))
+        screen.blit(ranking_txt, (ranking_btn.x+48, ranking_btn.y+ranking_btn.height//2-ranking_txt.get_height()//2))
         # Botón de ayuda en la esquina superior derecha
         help_btn_rect = pygame.Rect(SCREEN_WIDTH-70, 20, 48, 48)
         pygame.draw.rect(screen, (255, 220, 40), help_btn_rect, border_radius=12)
@@ -446,6 +527,12 @@ def show_difficulty_menu(screen):
                     if close_rect.collidepoint(mx, my):
                         show_skin_selector = False
             continue
+        if show_ranking:
+            # Renderizar la pantalla de dificultad como fondo para el ranking
+            fondo_surface = screen.copy()
+            mostrar_ranking_modal(screen, fondo_surface)
+            show_ranking = False
+            continue
         if not ia_submenu:
             button_data = [
                 (button_imgs[0], "Fácil"),
@@ -476,6 +563,9 @@ def show_difficulty_menu(screen):
                 sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mx, my = pygame.mouse.get_pos()
+                if ranking_btn.collidepoint(mx, my):
+                    show_ranking = True
+                    break
                 if help_btn_rect.collidepoint(mx, my):
                     show_help = True
                     break
@@ -664,10 +754,130 @@ def draw_game_over_glitch(screen, score):
 
 	return yes_rect, no_rect
 
+def get_player_name(screen, fondo_surface=None):
+    name = ""
+    clock = pygame.time.Clock()
+    input_active = True
+    backspace_pressed = False
+    backspace_timer = 0
+    while input_active:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN and len(name) > 0:
+                    input_active = False
+                elif event.key == pygame.K_BACKSPACE:
+                    backspace_pressed = True
+                    name = name[:-1]
+                elif len(name) < 10:  # Limitar a 10 caracteres
+                    # Solo aceptar letras y números
+                    if event.unicode.isalnum():
+                        name += event.unicode
+            elif event.type == pygame.KEYUP:
+                if event.key == pygame.K_BACKSPACE:
+                    backspace_pressed = False
+                    backspace_timer = 0
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                mx, my = pygame.mouse.get_pos()
+                if guardar_btn.collidepoint(mx, my) and len(name) > 0:
+                    input_active = False
+
+        # Manejar borrado continuo
+        if backspace_pressed:
+            backspace_timer += 1
+            if backspace_timer > 10:  # Esperar un poco antes de empezar a borrar
+                if backspace_timer % 5 == 0:  # Borrar cada 5 frames
+                    name = name[:-1]
+
+        if fondo_surface:
+            screen.blit(fondo_surface, (0, 0))
+        else:
+            screen.fill((0, 0, 0))
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        overlay.set_alpha(180)
+        overlay.fill((0, 0, 0))
+        screen.blit(overlay, (0, 0))
+        win_w, win_h = 540, 280  # Ventana más ancha y alta
+        win_x = (SCREEN_WIDTH - win_w) // 2
+        win_y = (SCREEN_HEIGHT - win_h) // 2
+        pygame.draw.rect(screen, (40, 40, 60), (win_x, win_y, win_w, win_h), border_radius=16)
+        pygame.draw.rect(screen, (255,255,255), (win_x, win_y, win_w, win_h), 3, border_radius=16)
+        titulo = FONT_TITLE.render("Ingresa tu nombre", True, (255,255,0))
+        screen.blit(titulo, (win_x + (win_w-titulo.get_width())//2, win_y+20))
+        
+        # Campo de texto
+        input_rect = pygame.Rect(win_x+50, win_y+80, win_w-100, 40)
+        pygame.draw.rect(screen, (255,255,255), input_rect, 2, border_radius=8)
+        
+        # Calcular el ancho máximo del texto (10 caracteres)
+        max_width = FONT_BUTTON.render("W" * 10, True, (255,255,255)).get_width()
+        # Calcular el ancho actual del texto
+        name_surface = FONT_BUTTON.render(name, True, (255,255,255))
+        current_width = name_surface.get_width()
+        
+        # Calcular la posición x para centrar el texto
+        # Si el texto es más corto que el máximo, centrarlo
+        if current_width < max_width:
+            text_x = input_rect.centerx - current_width//2
+        else:
+            # Si el texto es más largo, alinearlo a la izquierda
+            text_x = input_rect.x + 10
+        
+        text_y = input_rect.centery - name_surface.get_height()//2
+        screen.blit(name_surface, (text_x, text_y))
+        
+        if len(name) < 10:
+            # Posicionar el cursor después del texto
+            cursor_x = text_x + name_surface.get_width()
+            cursor_y = input_rect.centery - 10
+            pygame.draw.line(screen, (255,255,255), (cursor_x, cursor_y), (cursor_x, cursor_y+20), 2)
+        
+        # Instrucciones justo debajo del campo de texto
+        instrucciones = FONT_SMALL.render("Máximo 10 caracteres (solo letras y números)", True, (200,200,200))
+        screen.blit(instrucciones, (win_x + (win_w-instrucciones.get_width())//2, win_y+140))
+        
+        # Botón Guardar más abajo
+        guardar_btn = pygame.Rect(win_x+win_w//2-60, win_y+win_h-60, 120, 36)
+        color_btn = (0,180,0) if len(name) > 0 else (120,120,120)
+        pygame.draw.rect(screen, color_btn, guardar_btn, border_radius=8)
+        pygame.draw.rect(screen, (0,0,0), guardar_btn, 2, border_radius=8)
+        guardar_txt = FONT_BUTTON.render("Guardar", True, (255,255,255))
+        screen.blit(guardar_txt, (guardar_btn.centerx-guardar_txt.get_width()//2, guardar_btn.centery-guardar_txt.get_height()//2))
+        
+        pygame.display.flip()
+        clock.tick(60)
+    return name
+
 def run_game():
 	screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 	pygame.display.set_caption("EcoRunner: Nave contra la Basura")
 	clock = pygame.time.Clock()
+
+	# Renderizar la pantalla de selección de dificultad como fondo para el modal de nombre
+	bg = pygame.transform.smoothscale(menu_background, (SCREEN_WIDTH, SCREEN_HEIGHT))
+	screen.blit(bg, (0, 0))
+	draw_gradient_title(screen, "Selecciona la dificultad o modo de IA", -40)
+	# Botones de dificultad (solo visual, sin interacción)
+	button_data = [
+		(button_imgs[0], "Fácil"),
+		(button_imgs[1], "Normal"),
+		(button_imgs[2], "Difícil"),
+		(button_imgs[3], "IA")
+	]
+	button_width = 320
+	button_height = 56
+	button_gap = 28
+	start_y = SCREEN_HEIGHT // 2 - 140
+	for i, (img, label) in enumerate(button_data):
+		rect = pygame.Rect(SCREEN_WIDTH//2 - button_width//2, start_y + i * (button_height + button_gap), button_width, button_height)
+		draw_image_button(screen, rect, img, label, FONT_BIG, False)
+	pygame.display.flip()
+	fondo_surface = screen.copy()
+
+	# Pedir nombre antes de seleccionar dificultad
+	nombre_jugador = get_player_name(screen, fondo_surface)
 
 	q_agent = QLearningAgent(actions=[0, 1, 2, 3])
 	q_table_path = "data/q_table.pkl"
@@ -779,9 +989,10 @@ def run_game():
 						if menu_btn.collidepoint(mx, my):
 							in_game = False
 						elif event.button == 1 and not modo_ia:  # Click izquierdo
-							state["player"].shoot()
-							laser_sound.play()
-							state["shot"] = True
+							# Solo reproducir el sonido si realmente se crea una bala
+							if state["player"].shoot():
+								laser_sound.play()
+								state["shot"] = True
 						elif event.button == 3 and state["cleaner_ray_ready"]:  # Click derecho
 							state["cleaner_ray_active"] = True
 							state["cleaner_ray_time"] = 300  # 5 segundos a 60 FPS
@@ -1063,10 +1274,12 @@ def run_game():
 
 				if not state.get("score_saved", False):
 					with open("data/scores.csv", "a") as f:
-						f.write(f"{'IA'},{state['score']}\n")
+						f.write(f"{nombre_jugador},{difficulty},{state['score']}\n")
 					state["score_saved"] = True
 
 				yes_rect, no_rect = draw_game_over_glitch(screen, state["score"])
 
 			pygame.display.flip()
 			clock.tick(FPS)
+
+	return True
