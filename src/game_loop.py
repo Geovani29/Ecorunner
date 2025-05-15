@@ -401,17 +401,29 @@ def mostrar_ranking_modal(screen, fondo_surface=None):
     import csv
     ranking = {"Fácil":[], "Normal":[], "Difícil":[]}
     try:
-        with open("data/scores.csv", "r") as f:
+        with open("data/scores.csv", "r", encoding='utf-8') as f:
             for row in csv.reader(f):
-                if len(row) == 3:
+                # Ignorar líneas vacías o mal formateadas
+                if not row or len(row) < 3:
+                    continue
+                try:
                     nombre, dificultad, puntaje = row
+                    # Normalizar el nombre de la dificultad
+                    dificultad = dificultad.strip()  # Eliminar espacios en blanco
                     puntaje = int(puntaje)
                     if dificultad in ranking:
                         ranking[dificultad].append((nombre, puntaje))
+                except (ValueError, IndexError):
+                    continue
     except FileNotFoundError:
         pass
+    except Exception as e:
+        print(f"Error al leer el archivo de puntuaciones: {e}")
+
+    # Ordenar cada lista de puntuaciones
     for key in ranking:
         ranking[key].sort(key=lambda x: x[1], reverse=True)
+
     clock = pygame.time.Clock()
     salir = False
     while not salir:
