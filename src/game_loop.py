@@ -4,7 +4,7 @@ import os
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, FPS
 from player import Player
 from items import Trash, Obstacle, Explosion
-from rl.agent_runner import QLearningAgent
+from rl.agent_runner import OnlineQLearningController
 import numpy as np
 import math
 import sys
@@ -41,7 +41,7 @@ button_imgs = [pygame.transform.scale(img, (320, 56)) for img in button_imgs]
 
 # Cargar imágenes de skins de nave
 nave_skins = [
-    pygame.image.load(f"assets/images/nave{i}.png") for i in range(1, 5)
+	pygame.image.load(f"assets/images/nave{i}.png") for i in range(1, 5)
 ]
 nave_skins = [pygame.transform.scale(img, (64, 64)) for img in nave_skins]
 
@@ -354,247 +354,240 @@ def draw_help_box(screen, instructions, font):
 	return close_rect
 
 def draw_skin_selector(screen, current_idx):
-    # Ventana centrada estilo pixel art
-    box_width, box_height = 480, 220
-    box_x = SCREEN_WIDTH//2 - box_width//2
-    box_y = SCREEN_HEIGHT//2 - box_height//2
-    scale = 5
-    # Fondo y borde
-    pygame.draw.rect(screen, (30, 30, 60), (box_x, box_y, box_width, box_height), border_radius=18)
-    pygame.draw.rect(screen, (0,0,0), (box_x, box_y, box_width, box_height), scale, border_radius=18)
-    # Título
-    font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
-    title = font.render("ELIGE TU NAVE", True, (255,255,0))
-    screen.blit(title, (box_x+box_width//2-title.get_width()//2, box_y+18))
-    # Mostrar las 4 naves
-    skin_rects = []
-    for i, img in enumerate(nave_skins):
-        x = box_x + 40 + i*110
-        y = box_y + 70
-        rect = pygame.Rect(x, y, 64, 64)
-        skin_rects.append(rect)
-        screen.blit(img, rect.topleft)
-        # Resaltar la seleccionada
-        if i == current_idx:
-            pygame.draw.rect(screen, (255,255,0), rect.inflate(10,10), 4, border_radius=10)
-        else:
-            pygame.draw.rect(screen, (255,255,255), rect, 2, border_radius=10)
-    # Botón cerrar
-    close_rect = pygame.Rect(box_x+box_width-160, box_y+box_height-50, 130, 36)
-    pygame.draw.rect(screen, (255,180,40), close_rect, border_radius=12)
-    pygame.draw.rect(screen, (0,0,0), close_rect, 4, border_radius=12)
-    close_font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 18)
-    close_text = close_font.render("CERRAR", True, (0,0,0))
-    screen.blit(close_text, (close_rect.centerx-close_text.get_width()//2, close_rect.centery-close_text.get_height()//2))
-    return skin_rects, close_rect
+	# Ventana centrada estilo pixel art
+	box_width, box_height = 480, 220
+	box_x = SCREEN_WIDTH//2 - box_width//2
+	box_y = SCREEN_HEIGHT//2 - box_height//2
+	scale = 5
+	# Fondo y borde
+	pygame.draw.rect(screen, (30, 30, 60), (box_x, box_y, box_width, box_height), border_radius=18)
+	pygame.draw.rect(screen, (0,0,0), (box_x, box_y, box_width, box_height), scale, border_radius=18)
+	# Título
+	font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
+	title = font.render("ELIGE TU NAVE", True, (255,255,0))
+	screen.blit(title, (box_x+box_width//2-title.get_width()//2, box_y+18))
+	# Mostrar las 4 naves
+	skin_rects = []
+	for i, img in enumerate(nave_skins):
+		x = box_x + 40 + i*110
+		y = box_y + 70
+		rect = pygame.Rect(x, y, 64, 64)
+		skin_rects.append(rect)
+		screen.blit(img, rect.topleft)
+		# Resaltar la seleccionada
+		if i == current_idx:
+			pygame.draw.rect(screen, (255,255,0), rect.inflate(10,10), 4, border_radius=10)
+		else:
+			pygame.draw.rect(screen, (255,255,255), rect, 2, border_radius=10)
+	# Botón cerrar
+	close_rect = pygame.Rect(box_x+box_width-160, box_y+box_height-50, 130, 36)
+	pygame.draw.rect(screen, (255,180,40), close_rect, border_radius=12)
+	pygame.draw.rect(screen, (0,0,0), close_rect, 4, border_radius=12)
+	close_font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 18)
+	close_text = close_font.render("CERRAR", True, (0,0,0))
+	screen.blit(close_text, (close_rect.centerx-close_text.get_width()//2, close_rect.centery-close_text.get_height()//2))
+	return skin_rects, close_rect
 
 def draw_pixel_trophy(screen, x, y, scale=2):
-    # Trofeo pixel art simple
-    color = (255, 215, 0)
-    pygame.draw.rect(screen, color, (x+2*scale, y+6*scale, 4*scale, 6*scale)) # base
-    pygame.draw.rect(screen, color, (x, y+2*scale, 8*scale, 6*scale)) # copa
-    pygame.draw.rect(screen, color, (x-2*scale, y+4*scale, 2*scale, 2*scale)) # asa izq
-    pygame.draw.rect(screen, color, (x+8*scale, y+4*scale, 2*scale, 2*scale)) # asa der
-    pygame.draw.rect(screen, (255,255,255), (x+2*scale, y+3*scale, scale, scale)) # brillo
+	# Trofeo pixel art simple
+	color = (255, 215, 0)
+	pygame.draw.rect(screen, color, (x+2*scale, y+6*scale, 4*scale, 6*scale)) # base
+	pygame.draw.rect(screen, color, (x, y+2*scale, 8*scale, 6*scale)) # copa
+	pygame.draw.rect(screen, color, (x-2*scale, y+4*scale, 2*scale, 2*scale)) # asa izq
+	pygame.draw.rect(screen, color, (x+8*scale, y+4*scale, 2*scale, 2*scale)) # asa der
+	pygame.draw.rect(screen, (255,255,255), (x+2*scale, y+3*scale, scale, scale)) # brillo
 
 def mostrar_ranking_modal(screen, fondo_surface=None):
-    import csv
-    ranking = {"Fácil":[], "Normal":[], "Difícil":[]}
-    try:
-        with open("data/scores.csv", "r", encoding='utf-8') as f:
-            for row in csv.reader(f):
-                # Ignorar líneas vacías o mal formateadas
-                if not row or len(row) < 3:
-                    continue
-                try:
-                    nombre, dificultad, puntaje = row
-                    # Normalizar el nombre de la dificultad
-                    dificultad = dificultad.strip()  # Eliminar espacios en blanco
-                    puntaje = int(puntaje)
-                    if dificultad in ranking:
-                        ranking[dificultad].append((nombre, puntaje))
-                except (ValueError, IndexError):
-                    continue
-    except FileNotFoundError:
-        pass
-    except Exception as e:
-        print(f"Error al leer el archivo de puntuaciones: {e}")
+	import csv
+	ranking = {"Fácil":[], "Normal":[], "Difícil":[]}
+	try:
+		with open("data/scores.csv", "r", encoding='utf-8') as f:
+			for row in csv.reader(f):
+				# Ignorar líneas vacías o mal formateadas
+				if not row or len(row) < 3:
+					continue
+				try:
+					nombre, dificultad, puntaje = row
+					# Normalizar el nombre de la dificultad
+					dificultad = dificultad.strip()  # Eliminar espacios en blanco
+					puntaje = int(puntaje)
+					if dificultad in ranking:
+						ranking[dificultad].append((nombre, puntaje))
+				except (ValueError, IndexError):
+					continue
+	except FileNotFoundError:
+		pass
+	except Exception as e:
+		print(f"Error al leer el archivo de puntuaciones: {e}")
 
-    # Ordenar cada lista de puntuaciones
-    for key in ranking:
-        ranking[key].sort(key=lambda x: x[1], reverse=True)
+	# Ordenar cada lista de puntuaciones
+	for key in ranking:
+		ranking[key].sort(key=lambda x: x[1], reverse=True)
 
-    clock = pygame.time.Clock()
-    salir = False
-    while not salir:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                mx, my = pygame.mouse.get_pos()
-                if cerrar_btn.collidepoint(mx, my):
-                    salir = True
-        # Fondo: si hay fondo_surface, usarlo, si no, negro
-        if fondo_surface:
-            screen.blit(fondo_surface, (0, 0))
-        else:
-            screen.fill((0, 0, 0))
-        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-        overlay.set_alpha(180)
-        overlay.fill((0, 0, 0))
-        screen.blit(overlay, (0, 0))
-        win_w, win_h = 700, 400
-        win_x = (SCREEN_WIDTH - win_w) // 2
-        win_y = (SCREEN_HEIGHT - win_h) // 2
-        pygame.draw.rect(screen, (40, 40, 60), (win_x, win_y, win_w, win_h), border_radius=16)
-        pygame.draw.rect(screen, (255,255,255), (win_x, win_y, win_w, win_h), 3, border_radius=16)
-        titulo = FONT_TITLE.render("Ranking", True, (255,255,0))
-        screen.blit(titulo, (win_x + (win_w-titulo.get_width())//2, win_y+20))
-        col_w = win_w // 3
-        col_titles = ["Fácil", "Normal", "Difícil"]
-        for i, dificultad in enumerate(col_titles):
-            col_x = win_x + i*col_w
-            subt = FONT_UI.render(dificultad, True, (0,255,255))
-            screen.blit(subt, (col_x + (col_w-subt.get_width())//2, win_y+60))
-            for j, (nombre, puntaje) in enumerate(ranking[dificultad][:5], 1):
-                linea = FONT_SMALL.render(f"{j}. {nombre}: {puntaje}", True, (255,255,255))
-                screen.blit(linea, (col_x + 20, win_y+100 + (j-1)*28))
-            if i < 2:
-                pygame.draw.line(screen, (180,180,180), (col_x+col_w, win_y+50), (col_x+col_w, win_y+win_h-80), 3)
-        cerrar_btn = pygame.Rect(win_x+win_w//2-60, win_y+win_h-60, 120, 36)
-        pygame.draw.rect(screen, (180,0,0), cerrar_btn, border_radius=8)
-        pygame.draw.rect(screen, (0,0,0), cerrar_btn, 2, border_radius=8)
-        cerrar_txt = FONT_BUTTON.render("Cerrar", True, (255,255,255))
-        screen.blit(cerrar_txt, (cerrar_btn.centerx-cerrar_txt.get_width()//2, cerrar_btn.centery-cerrar_txt.get_height()//2))
-        pygame.display.flip()
-        clock.tick(60)
+	clock = pygame.time.Clock()
+	salir = False
+	while not salir:
+		for event in pygame.event.get():
+			if event.type == pygame.QUIT:
+				pygame.quit()
+				sys.exit()
+			elif event.type == pygame.MOUSEBUTTONDOWN:
+				mx, my = pygame.mouse.get_pos()
+				if cerrar_btn.collidepoint(mx, my):
+					salir = True
+		# Fondo: si hay fondo_surface, usarlo, si no, negro
+		if fondo_surface:
+			screen.blit(fondo_surface, (0, 0))
+		else:
+			screen.fill((0, 0, 0))
+		overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+		overlay.set_alpha(180)
+		overlay.fill((0, 0, 0))
+		screen.blit(overlay, (0, 0))
+		win_w, win_h = 700, 400
+		win_x = (SCREEN_WIDTH - win_w) // 2
+		win_y = (SCREEN_HEIGHT - win_h) // 2
+		pygame.draw.rect(screen, (40, 40, 60), (win_x, win_y, win_w, win_h), border_radius=16)
+		pygame.draw.rect(screen, (255,255,255), (win_x, win_y, win_w, win_h), 3, border_radius=16)
+		titulo = FONT_TITLE.render("Ranking", True, (255,255,0))
+		screen.blit(titulo, (win_x + (win_w-titulo.get_width())//2, win_y+20))
+		col_w = win_w // 3
+		col_titles = ["Fácil", "Normal", "Difícil"]
+		for i, dificultad in enumerate(col_titles):
+			col_x = win_x + i*col_w
+			subt = FONT_UI.render(dificultad, True, (0,255,255))
+			screen.blit(subt, (col_x + (col_w-subt.get_width())//2, win_y+60))
+			for j, (nombre, puntaje) in enumerate(ranking[dificultad][:5], 1):
+				linea = FONT_SMALL.render(f"{j}. {nombre}: {puntaje}", True, (255,255,255))
+				screen.blit(linea, (col_x + 20, win_y+100 + (j-1)*28))
+			if i < 2:
+				pygame.draw.line(screen, (180,180,180), (col_x+col_w, win_y+50), (col_x+col_w, win_y+win_h-80), 3)
+		cerrar_btn = pygame.Rect(win_x+win_w//2-60, win_y+win_h-60, 120, 36)
+		pygame.draw.rect(screen, (180,0,0), cerrar_btn, border_radius=8)
+		pygame.draw.rect(screen, (0,0,0), cerrar_btn, 2, border_radius=8)
+		cerrar_txt = FONT_BUTTON.render("Cerrar", True, (255,255,255))
+		screen.blit(cerrar_txt, (cerrar_btn.centerx-cerrar_txt.get_width()//2, cerrar_btn.centery-cerrar_txt.get_height()//2))
+		pygame.display.flip()
+		clock.tick(60)
+
+def get_safe_lists(trash_list, obstacle_list):
+	return (trash_list if trash_list else [], obstacle_list if obstacle_list else [])
 
 def show_difficulty_menu(screen):
-    global selected_skin_idx
-    selected_mode = None
-    bg = pygame.transform.smoothscale(menu_background, (SCREEN_WIDTH, SCREEN_HEIGHT))
-    ia_submenu = False
-    show_help = False
-    show_skin_selector = False
-    show_ranking = False
-    help_instructions = [
-        "- Usa W/S o ↑/↓ para mover la nave",
-        "- Dispara con click izquierdo",
-        "- Recolecta basura para sumar puntos",
-        "- Si pierdes basura, el planeta se oscurece",
-        "- Escudo: 5 basuras seguidas",
-        "- Rayo: 10 basuras seguidas, click derecho",
-        "- Evita los pájaros y obstáculos",
-        "- El juego termina si tu salud llega a 0"
-    ]
-    while not selected_mode:
-        screen.blit(bg, (0, 0))
-        draw_gradient_title(screen, "Selecciona la dificultad o modo de IA", -40)
-        # Botón de ranking arriba a la izquierda
-        ranking_btn = pygame.Rect(20, 20, 140, 48)
-        pygame.draw.rect(screen, (255, 220, 40), ranking_btn, border_radius=12)
-        pygame.draw.rect(screen, (0,0,0), ranking_btn, 4, border_radius=12)
-        screen.blit(trofeo_img, (ranking_btn.x+8, ranking_btn.y+4))
-        ranking_txt = FONT_BUTTON.render("Ranking", True, (0,0,0))
-        screen.blit(ranking_txt, (ranking_btn.x+48, ranking_btn.y+ranking_btn.height//2-ranking_txt.get_height()//2))
-        # Botón de ayuda en la esquina superior derecha
-        help_btn_rect = pygame.Rect(SCREEN_WIDTH-70, 20, 48, 48)
-        pygame.draw.rect(screen, (255, 220, 40), help_btn_rect, border_radius=12)
-        pygame.draw.rect(screen, (0,0,0), help_btn_rect, 4, border_radius=12)
-        q_font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 32)
-        q_text = q_font.render("?", True, (0,0,0))
-        screen.blit(q_text, (help_btn_rect.centerx-q_text.get_width()//2, help_btn_rect.centery-q_text.get_height()//2))
-        # Botón elegir skin
-        skin_btn_rect = pygame.Rect(SCREEN_WIDTH-210, 20, 120, 48)
-        pygame.draw.rect(screen, (70,200,255), skin_btn_rect, border_radius=12)
-        pygame.draw.rect(screen, (0,0,0), skin_btn_rect, 4, border_radius=12)
-        skin_font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 16)
-        skin_text = skin_font.render("Skins", True, (0,0,0))
-        screen.blit(skin_text, (skin_btn_rect.centerx-skin_text.get_width()//2, skin_btn_rect.centery-skin_text.get_height()//2))
-        if show_help:
-            close_rect = draw_help_box(screen, help_instructions, FONT_BUTTON)
-            pygame.display.flip()
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    mx, my = pygame.mouse.get_pos()
-                    if close_rect.collidepoint(mx, my):
-                        show_help = False
-            continue
-        if show_skin_selector:
-            skin_rects, close_rect = draw_skin_selector(screen, selected_skin_idx)
-            pygame.display.flip()
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    mx, my = pygame.mouse.get_pos()
-                    for idx, rect in enumerate(skin_rects):
-                        if rect.collidepoint(mx, my):
-                            selected_skin_idx = idx
-                    if close_rect.collidepoint(mx, my):
-                        show_skin_selector = False
-            continue
-        if show_ranking:
-            # Renderizar la pantalla de dificultad como fondo para el ranking
-            fondo_surface = screen.copy()
-            mostrar_ranking_modal(screen, fondo_surface)
-            show_ranking = False
-            continue
-        if not ia_submenu:
-            button_data = [
-                (button_imgs[0], "Fácil"),
-                (button_imgs[1], "Normal"),
-                (button_imgs[2], "Difícil"),
-                (button_imgs[3], "IA")
-            ]
-        else:
-            button_data = [
-                (button_imgs[3], "IA - Manual"),
-                (button_imgs[3], "IA - Automática")
-            ]
-        buttons = {}
-        start_y = SCREEN_HEIGHT // 2 - (140 if not ia_submenu else 40)
-        button_width = 320
-        button_height = 56
-        button_gap = 28
-        mouse_pos = pygame.mouse.get_pos()
-        for i, (img, label) in enumerate(button_data):
-            rect = pygame.Rect(SCREEN_WIDTH//2 - button_width//2, start_y + i * (button_height + button_gap), button_width, button_height)
-            buttons[label] = rect
-            is_hovered = rect.collidepoint(mouse_pos)
-            draw_image_button(screen, rect, img, label, FONT_BIG, is_hovered)
-        pygame.display.flip()
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                mx, my = pygame.mouse.get_pos()
-                if ranking_btn.collidepoint(mx, my):
-                    show_ranking = True
-                    break
-                if help_btn_rect.collidepoint(mx, my):
-                    show_help = True
-                    break
-                if skin_btn_rect.collidepoint(mx, my):
-                    show_skin_selector = True
-                    break
-                for label, rect in buttons.items():
-                    if rect.collidepoint(mx, my):
-                        if label == "IA" and not ia_submenu:
-                            ia_submenu = True
-                            break
-                        elif label == "IA - Manual":
-                            return "IA", "Manual", selected_skin_idx
-                        elif label == "IA - Automática":
-                            return "IA", "Automatica", selected_skin_idx
-                        else:
-                            return label, None, selected_skin_idx
+	global selected_skin_idx
+	selected_mode = None
+	bg = pygame.transform.smoothscale(menu_background, (SCREEN_WIDTH, SCREEN_HEIGHT))
+	show_help = False
+	show_skin_selector = False
+	show_ranking = False
+	help_instructions = [
+		"- Usa W/S o ↑/↓ para mover la nave",
+		"- Dispara con click izquierdo",
+		"- Recolecta basura para sumar puntos",
+		"- Si pierdes basura, el planeta se oscurece",
+		"- Escudo: 5 basuras seguidas",
+		"- Rayo: 10 basuras seguidas, click derecho",
+		"- Evita los pájaros y obstáculos",
+		"- El juego termina si tu salud llega a 0"
+	]
+	while not selected_mode:
+		screen.blit(bg, (0, 0))
+		draw_gradient_title(screen, "Selecciona la dificultad o modo de IA", -40)
+		# Botón de ranking arriba a la izquierda
+		ranking_btn = pygame.Rect(20, 20, 140, 48)
+		pygame.draw.rect(screen, (255, 220, 40), ranking_btn, border_radius=12)
+		pygame.draw.rect(screen, (0,0,0), ranking_btn, 4, border_radius=12)
+		screen.blit(trofeo_img, (ranking_btn.x+8, ranking_btn.y+4))
+		ranking_txt = FONT_BUTTON.render("Ranking", True, (0,0,0))
+		screen.blit(ranking_txt, (ranking_btn.x+48, ranking_btn.y+ranking_btn.height//2-ranking_txt.get_height()//2))
+		# Botón de ayuda en la esquina superior derecha
+		help_btn_rect = pygame.Rect(SCREEN_WIDTH-70, 20, 48, 48)
+		pygame.draw.rect(screen, (255, 220, 40), help_btn_rect, border_radius=12)
+		pygame.draw.rect(screen, (0,0,0), help_btn_rect, 4, border_radius=12)
+		q_font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 32)
+		q_text = q_font.render("?", True, (0,0,0))
+		screen.blit(q_text, (help_btn_rect.centerx-q_text.get_width()//2, help_btn_rect.centery-q_text.get_height()//2))
+		# Botón elegir skin
+		skin_btn_rect = pygame.Rect(SCREEN_WIDTH-210, 20, 120, 48)
+		pygame.draw.rect(screen, (70,200,255), skin_btn_rect, border_radius=12)
+		pygame.draw.rect(screen, (0,0,0), skin_btn_rect, 4, border_radius=12)
+		skin_font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 16)
+		skin_text = skin_font.render("Skins", True, (0,0,0))
+		screen.blit(skin_text, (skin_btn_rect.centerx-skin_text.get_width()//2, skin_btn_rect.centery-skin_text.get_height()//2))
+		if show_help:
+			close_rect = draw_help_box(screen, help_instructions, FONT_BUTTON)
+			pygame.display.flip()
+			for event in pygame.event.get():
+				if event.type == pygame.QUIT:
+					pygame.quit()
+					sys.exit()
+				if event.type == pygame.MOUSEBUTTONDOWN:
+					mx, my = pygame.mouse.get_pos()
+					if close_rect.collidepoint(mx, my):
+						show_help = False
+			continue
+		if show_skin_selector:
+			skin_rects, close_rect = draw_skin_selector(screen, selected_skin_idx)
+			pygame.display.flip()
+			for event in pygame.event.get():
+				if event.type == pygame.QUIT:
+					pygame.quit()
+					sys.exit()
+				if event.type == pygame.MOUSEBUTTONDOWN:
+					mx, my = pygame.mouse.get_pos()
+					for idx, rect in enumerate(skin_rects):
+						if rect.collidepoint(mx, my):
+							selected_skin_idx = idx
+					if close_rect.collidepoint(mx, my):
+						show_skin_selector = False
+			continue
+		if show_ranking:
+			# Renderizar la pantalla de dificultad como fondo para el ranking
+			fondo_surface = screen.copy()
+			mostrar_ranking_modal(screen, fondo_surface)
+			show_ranking = False
+			continue
+
+		button_data = [
+			(button_imgs[0], "Fácil"),
+			(button_imgs[1], "Normal"),
+			(button_imgs[2], "Difícil"),
+			(button_imgs[3], "IA")
+		]
+
+		buttons = {}
+		start_y = SCREEN_HEIGHT // 2 - 140
+		button_width = 320
+		button_height = 56
+		button_gap = 28
+		mouse_pos = pygame.mouse.get_pos()
+		for i, (img, label) in enumerate(button_data):
+			rect = pygame.Rect(SCREEN_WIDTH//2 - button_width//2, start_y + i * (button_height + button_gap), button_width, button_height)
+			buttons[label] = rect
+			is_hovered = rect.collidepoint(mouse_pos)
+			draw_image_button(screen, rect, img, label, FONT_BIG, is_hovered)
+		pygame.display.flip()
+		for event in pygame.event.get():
+			if event.type == pygame.QUIT:
+				pygame.quit()
+				sys.exit()
+			if event.type == pygame.MOUSEBUTTONDOWN:
+				mx, my = pygame.mouse.get_pos()
+				if ranking_btn.collidepoint(mx, my):
+					show_ranking = True
+					break
+				if help_btn_rect.collidepoint(mx, my):
+					show_help = True
+					break
+				if skin_btn_rect.collidepoint(mx, my):
+					show_skin_selector = True
+					break
+				for label, rect in buttons.items():
+					if rect.collidepoint(mx, my):
+						if label == "IA":
+							return "IA", "Automatica", selected_skin_idx
+						else:
+							return label, None, selected_skin_idx
 
 def draw_menu_button(screen, mouse_pos):
 	menu_btn = pygame.Rect(SCREEN_WIDTH - 230, 10, 210, 36)
@@ -767,105 +760,113 @@ def draw_game_over_glitch(screen, score):
 	return yes_rect, no_rect
 
 def get_player_name(screen, fondo_surface=None):
-    name = ""
-    clock = pygame.time.Clock()
-    input_active = True
-    backspace_pressed = False
-    backspace_timer = 0
-    while input_active:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_RETURN and len(name) > 0:
-                    input_active = False
-                elif event.key == pygame.K_BACKSPACE:
-                    backspace_pressed = True
-                    name = name[:-1]
-                elif len(name) < 10:  # Limitar a 10 caracteres
-                    # Solo aceptar letras y números
-                    if event.unicode.isalnum():
-                        name += event.unicode
-            elif event.type == pygame.KEYUP:
-                if event.key == pygame.K_BACKSPACE:
-                    backspace_pressed = False
-                    backspace_timer = 0
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                mx, my = pygame.mouse.get_pos()
-                if guardar_btn.collidepoint(mx, my) and len(name) > 0:
-                    input_active = False
+	name = ""
+	clock = pygame.time.Clock()
+	input_active = True
+	backspace_pressed = False
+	backspace_timer = 0
+	
+	# Definir el botón guardar al inicio
+	win_w, win_h = 540, 280
+	win_x = (SCREEN_WIDTH - win_w) // 2
+	win_y = (SCREEN_HEIGHT - win_h) // 2
+	guardar_btn = pygame.Rect(win_x+win_w//2-60, win_y+win_h-60, 120, 36)
+	
+	while input_active:
+		for event in pygame.event.get():
+			if event.type == pygame.QUIT:
+				pygame.quit()
+				sys.exit()
+			if event.type == pygame.KEYDOWN:
+				if event.key == pygame.K_RETURN and len(name) > 0:
+					input_active = False
+				elif event.key == pygame.K_BACKSPACE:
+					backspace_pressed = True
+					name = name[:-1]
+				elif len(name) < 10:  # Limitar a 10 caracteres
+					# Solo aceptar letras y números
+					if event.unicode.isalnum():
+						name += event.unicode
+			elif event.type == pygame.KEYUP:
+				if event.key == pygame.K_BACKSPACE:
+					backspace_pressed = False
+					backspace_timer = 0
+			elif event.type == pygame.MOUSEBUTTONDOWN:
+				mx, my = pygame.mouse.get_pos()
+				if guardar_btn.collidepoint(mx, my) and len(name) > 0:
+					input_active = False
 
-        # Manejar borrado continuo
-        if backspace_pressed:
-            backspace_timer += 1
-            if backspace_timer > 10:  # Esperar un poco antes de empezar a borrar
-                if backspace_timer % 5 == 0:  # Borrar cada 5 frames
-                    name = name[:-1]
+		# Manejar borrado continuo
+		if backspace_pressed:
+			backspace_timer += 1
+			if backspace_timer > 10:  # Esperar un poco antes de empezar a borrar
+				if backspace_timer % 5 == 0:  # Borrar cada 5 frames
+					name = name[:-1]
 
-        if fondo_surface:
-            screen.blit(fondo_surface, (0, 0))
-        else:
-            screen.fill((0, 0, 0))
-        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-        overlay.set_alpha(180)
-        overlay.fill((0, 0, 0))
-        screen.blit(overlay, (0, 0))
-        win_w, win_h = 540, 280  # Ventana más ancha y alta
-        win_x = (SCREEN_WIDTH - win_w) // 2
-        win_y = (SCREEN_HEIGHT - win_h) // 2
-        pygame.draw.rect(screen, (40, 40, 60), (win_x, win_y, win_w, win_h), border_radius=16)
-        pygame.draw.rect(screen, (255,255,255), (win_x, win_y, win_w, win_h), 3, border_radius=16)
-        titulo = FONT_TITLE.render("Ingresa tu nombre", True, (255,255,0))
-        screen.blit(titulo, (win_x + (win_w-titulo.get_width())//2, win_y+20))
-        
-        # Campo de texto
-        input_rect = pygame.Rect(win_x+50, win_y+80, win_w-100, 40)
-        pygame.draw.rect(screen, (255,255,255), input_rect, 2, border_radius=8)
-        
-        # Calcular el ancho máximo del texto (10 caracteres)
-        max_width = FONT_BUTTON.render("W" * 10, True, (255,255,255)).get_width()
-        # Calcular el ancho actual del texto
-        name_surface = FONT_BUTTON.render(name, True, (255,255,255))
-        current_width = name_surface.get_width()
-        
-        # Calcular la posición x para centrar el texto
-        # Si el texto es más corto que el máximo, centrarlo
-        if current_width < max_width:
-            text_x = input_rect.centerx - current_width//2
-        else:
-            # Si el texto es más largo, alinearlo a la izquierda
-            text_x = input_rect.x + 10
-        
-        text_y = input_rect.centery - name_surface.get_height()//2
-        screen.blit(name_surface, (text_x, text_y))
-        
-        if len(name) < 10:
-            # Posicionar el cursor después del texto
-            cursor_x = text_x + name_surface.get_width()
-            cursor_y = input_rect.centery - 10
-            pygame.draw.line(screen, (255,255,255), (cursor_x, cursor_y), (cursor_x, cursor_y+20), 2)
-        
-        # Instrucciones justo debajo del campo de texto
-        instrucciones = FONT_SMALL.render("Máximo 10 caracteres (solo letras y números)", True, (200,200,200))
-        screen.blit(instrucciones, (win_x + (win_w-instrucciones.get_width())//2, win_y+140))
-        
-        # Botón Guardar más abajo
-        guardar_btn = pygame.Rect(win_x+win_w//2-60, win_y+win_h-60, 120, 36)
-        color_btn = (0,180,0) if len(name) > 0 else (120,120,120)
-        pygame.draw.rect(screen, color_btn, guardar_btn, border_radius=8)
-        pygame.draw.rect(screen, (0,0,0), guardar_btn, 2, border_radius=8)
-        guardar_txt = FONT_BUTTON.render("Guardar", True, (255,255,255))
-        screen.blit(guardar_txt, (guardar_btn.centerx-guardar_txt.get_width()//2, guardar_btn.centery-guardar_txt.get_height()//2))
-        
-        pygame.display.flip()
-        clock.tick(60)
-    return name
+		if fondo_surface:
+			screen.blit(fondo_surface, (0, 0))
+		else:
+			screen.fill((0, 0, 0))
+		overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+		overlay.set_alpha(180)
+		overlay.fill((0, 0, 0))
+		screen.blit(overlay, (0, 0))
+		win_w, win_h = 540, 280  # Ventana más ancha y alta
+		win_x = (SCREEN_WIDTH - win_w) // 2
+		win_y = (SCREEN_HEIGHT - win_h) // 2
+		pygame.draw.rect(screen, (40, 40, 60), (win_x, win_y, win_w, win_h), border_radius=16)
+		pygame.draw.rect(screen, (255,255,255), (win_x, win_y, win_w, win_h), 3, border_radius=16)
+		titulo = FONT_TITLE.render("Ingresa tu nombre", True, (255,255,0))
+		screen.blit(titulo, (win_x + (win_w-titulo.get_width())//2, win_y+20))
+		
+		# Campo de texto
+		input_rect = pygame.Rect(win_x+50, win_y+80, win_w-100, 40)
+		pygame.draw.rect(screen, (255,255,255), input_rect, 2, border_radius=8)
+		
+		# Calcular el ancho máximo del texto (10 caracteres)
+		max_width = FONT_BUTTON.render("W" * 10, True, (255,255,255)).get_width()
+		# Calcular el ancho actual del texto
+		name_surface = FONT_BUTTON.render(name, True, (255,255,255))
+		current_width = name_surface.get_width()
+		
+		# Calcular la posición x para centrar el texto
+		# Si el texto es más corto que el máximo, centrarlo
+		if current_width < max_width:
+			text_x = input_rect.centerx - current_width//2
+		else:
+			# Si el texto es más largo, alinearlo a la izquierda
+			text_x = input_rect.x + 10
+		
+		text_y = input_rect.centery - name_surface.get_height()//2
+		screen.blit(name_surface, (text_x, text_y))
+		
+		if len(name) < 10:
+			# Posicionar el cursor después del texto
+			cursor_x = text_x + name_surface.get_width()
+			cursor_y = input_rect.centery - 10
+			pygame.draw.line(screen, (255,255,255), (cursor_x, cursor_y), (cursor_x, cursor_y+20), 2)
+		
+		# Instrucciones justo debajo del campo de texto
+		instrucciones = FONT_SMALL.render("Máximo 10 caracteres (solo letras y números)", True, (200,200,200))
+		screen.blit(instrucciones, (win_x + (win_w-instrucciones.get_width())//2, win_y+140))
+		
+		# Botón Guardar más abajo
+		pygame.draw.rect(screen, (0,180,0), guardar_btn, border_radius=8)
+		pygame.draw.rect(screen, (0,0,0), guardar_btn, 2, border_radius=8)
+		guardar_txt = FONT_BUTTON.render("Guardar", True, (255,255,255))
+		screen.blit(guardar_txt, (guardar_btn.centerx-guardar_txt.get_width()//2, guardar_btn.centery-guardar_txt.get_height()//2))
+		
+		pygame.display.flip()
+		clock.tick(60)
+	return name
 
 def run_game():
 	screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 	pygame.display.set_caption("EcoRunner: Nave contra la Basura")
 	clock = pygame.time.Clock()
+
+	# Inicializar el controlador de IA
+	ia = OnlineQLearningController()
 
 	# Renderizar la pantalla de selección de dificultad como fondo para el modal de nombre
 	bg = pygame.transform.smoothscale(menu_background, (SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -890,11 +891,6 @@ def run_game():
 
 	# Pedir nombre antes de seleccionar dificultad
 	nombre_jugador = get_player_name(screen, fondo_surface)
-
-	q_agent = QLearningAgent(actions=[0, 1, 2, 3])
-	q_table_path = "data/q_table.pkl"
-	if os.path.exists(q_table_path):
-		q_agent.load(q_table_path)
 
 	running = True
 	while running:
@@ -938,8 +934,6 @@ def run_game():
 				"last_damage_time": 0,
 				"game_over": False,
 				"explosions": [],
-				"last_state": None,
-				"last_action": None,
 				"moved_up": False,
 				"moved_down": False,
 				"shot": False,
@@ -953,7 +947,7 @@ def run_game():
 				"cleaner_ray_alpha": 0,
 				"cleaner_ray_y": 0,
 				"ray_offset": 0,
-				"laser_sound_playing": False  # Control para el sonido del láser
+				"laser_sound_playing": False
 			}
 
 		state = reset_game()
@@ -1001,7 +995,6 @@ def run_game():
 						if menu_btn.collidepoint(mx, my):
 							in_game = False
 						elif event.button == 1 and not modo_ia:  # Click izquierdo
-							# Solo reproducir el sonido si realmente se crea una bala
 							if state["player"].shoot():
 								laser_sound.play()
 								state["shot"] = True
@@ -1100,23 +1093,57 @@ def run_game():
 				menu_btn = draw_menu_button(screen, mouse_pos)
 
 				if modo_ia:
-					trash_y = state["trash_list"][0].y if state["trash_list"] else SCREEN_HEIGHT // 2
-					current_state = (state["player"].rect.y // 50, trash_y // 50)
-
-					if state["last_state"] is not None:
-						q_agent.learn(state["last_state"], state["last_action"], -1, current_state)
-
-					action = q_agent.choose_action(current_state)
-					state["last_state"] = current_state
-					state["last_action"] = action
-
-					if action == 1:
-						state["player"].rect.y -= state["player"].speed
-					elif action == 2:
-						state["player"].rect.y += state["player"].speed
-					elif action == 3:
-						state["player"].shoot()
-						laser_sound.play()
+					# Obtener la acción del controlador de IA
+					# Crear listas temporales para evitar errores
+					trash_list = state["trash_list"] if state["trash_list"] else []
+					obstacle_list = state["obstacles"] if state["obstacles"] else []
+					
+					# Solo proceder si hay elementos en alguna de las listas
+					if trash_list or obstacle_list:
+						action = ia.choose(state["player"].rect.y, trash_list, obstacle_list)
+						
+						# Ejecutar la acción
+						if action == 0:  # No hacer nada
+							pass
+						elif action == 1:  # Mover arriba
+							state["player"].rect.y = max(0, state["player"].rect.y - state["player"].speed)
+						elif action == 2:  # Mover abajo
+							state["player"].rect.y = min(SCREEN_HEIGHT - state["player"].rect.height, state["player"].rect.y + state["player"].speed)
+						elif action == 3:  # Disparar
+							if state["player"].shoot():
+								laser_sound.play()
+								state["shot"] = True
+						
+						# Calcular recompensa total para este frame
+						reward = 0
+						if state["score"] > state.get("last_score", 0):
+							reward += 10  # Recompensa por recolectar basura
+						if state["missed_trash"] > state.get("last_missed", 0):
+							reward -= 5   # Penalización por perder basura
+						if state["player"].health < state.get("last_health", 100):
+							reward -= 10  # Penalización por recibir daño
+						
+						# Si murió este frame, penalización adicional
+						if state["game_over"]:
+							reward -= 30  # Penalización por muerte
+						
+						# Actualizar estado anterior
+						state["last_score"] = state["score"]
+						state["last_missed"] = state["missed_trash"]
+						state["last_health"] = state["player"].health
+						
+						# Aprender de la experiencia (una única vez por frame)
+						ia.learn(reward, state["player"].rect.y, trash_list, obstacle_list, state["game_over"])
+						
+						# Si murió, reiniciar el estado
+						if state["game_over"]:
+							state = reset_game()
+					else:
+						# Si no hay basura u obstáculos, mantener la nave en el centro
+						if state["player"].rect.y < SCREEN_HEIGHT // 2:
+							state["player"].rect.y += state["player"].speed
+						elif state["player"].rect.y > SCREEN_HEIGHT // 2:
+							state["player"].rect.y -= state["player"].speed
 				else:
 					# Actualizar estado de ayuda contextual
 					if keys[pygame.K_w]:
@@ -1131,9 +1158,9 @@ def run_game():
 				if state["shield_active"]:
 					shield_surface = pygame.Surface((state["player"].rect.width + 40, state["player"].rect.height + 40), pygame.SRCALPHA)
 					pygame.draw.ellipse(shield_surface, (0, 255, 255, state["shield_alpha"]), 
-									 (0, 0, state["player"].rect.width + 40, state["player"].rect.height + 40), 3)
+					(0, 0, state["player"].rect.width + 40, state["player"].rect.height + 40), 3)
 					screen.blit(shield_surface, 
-							  (state["player"].rect.x - 20, state["player"].rect.y - 20))
+					(state["player"].rect.x - 20, state["player"].rect.y - 20))
 
 				# Dibujar el rayo limpiador si está activo
 				if state["cleaner_ray_active"]:
@@ -1195,9 +1222,6 @@ def run_game():
 							explosion = Explosion(trash.x - trash.radius, trash.y - trash.radius, trash.radius * 2)
 							state["explosions"].append(explosion)
 							explosion_sound.play()
-
-							if modo_ia:
-								q_agent.learn(state["last_state"], state["last_action"], 10, state["last_state"])
 
 							if not trash_removed:
 								state["trash_list"].remove(trash)
@@ -1281,15 +1305,16 @@ def run_game():
 
 			else:
 				if modo_ia:
-					q_agent.learn(state["last_state"], state["last_action"], -10, state["last_state"])
-					q_agent.save(q_table_path)
+					ia.learn(reward, state["player"].rect.y, state["trash_list"], state["obstacles"], state["game_over"])
+					# Reiniciar automáticamente si es modo IA
+					state = reset_game()
+				else:
+					if not state.get("score_saved", False):
+						with open("data/scores.csv", "a") as f:
+							f.write(f"{nombre_jugador},{difficulty},{state['score']}\n")
+						state["score_saved"] = True
 
-				if not state.get("score_saved", False):
-					with open("data/scores.csv", "a") as f:
-						f.write(f"{nombre_jugador},{difficulty},{state['score']}\n")
-					state["score_saved"] = True
-
-				yes_rect, no_rect = draw_game_over_glitch(screen, state["score"])
+					yes_rect, no_rect = draw_game_over_glitch(screen, state["score"])
 
 			pygame.display.flip()
 			clock.tick(FPS)

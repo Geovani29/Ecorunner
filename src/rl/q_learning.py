@@ -24,14 +24,16 @@ class QLearningAgent:
         q_max_next = max([self.get_q(next_state, a) for a in self.actions])
         self.q_table[(state, action)] = q_current + self.alpha * (reward + self.gamma * q_max_next - q_current)
 
-        # 🔁 Disminuir epsilon gradualmente (hasta un mínimo)
-        self.epsilon = max(0.05, self.epsilon * 0.995)
+    def save(self, path):
+        data = {
+            'q_table': self.q_table,
+            'epsilon': self.epsilon
+        }
+        with open(path, 'wb') as f:
+            pickle.dump(data, f)
 
-
-    def save(self, filename):
-        with open(filename, 'wb') as f:
-            pickle.dump(self.q_table, f)
-
-    def load(self, filename):
-        with open(filename, 'rb') as f:
-            self.q_table = pickle.load(f)
+    def load(self, path):
+        with open(path, 'rb') as f:
+            data = pickle.load(f)
+            self.q_table = data['q_table']
+            self.epsilon = data.get('epsilon', self.epsilon)  # Usa el valor guardado o mantiene el actual
