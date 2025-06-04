@@ -1,6 +1,12 @@
+import pygame
+
+# Obtener dimensiones de la pantalla
+pygame.init()
+info = pygame.display.Info()
+SCREEN_WIDTH = info.current_w
+SCREEN_HEIGHT = info.current_h
+
 # Configuración general
-SCREEN_WIDTH = 1200
-SCREEN_HEIGHT = 800
 FPS = 60
 
 PLAYER_SIZE = 50
