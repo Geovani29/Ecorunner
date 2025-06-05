@@ -22,7 +22,7 @@ SCREEN_HEIGHT    = 800
 PLAYER_STEP      = 60
 TRASH_SPEED      = 5
 
-TRAIN_EPISODES   = 80000
+TRAIN_EPISODES   = 320000 * 4
 MAX_STEPS_PER_EP = 300
 
 # Hiperparámetros RL
@@ -39,33 +39,40 @@ class SimEnvironment:
         self.reset()
 
     def reset(self):
-        self.player_y     = SCREEN_HEIGHT // 2
-        self.trash_y      = random.randint(0, SCREEN_HEIGHT)
-        self.trash_x      = 800
-        self.obstacle_y   = random.randint(0, SCREEN_HEIGHT)
-        self.obstacle_x   = random.choice([900, 1100, 1300])
-        self.steps_alive  = 0
-        self.last_y       = self.player_y
+        self.player_y = SCREEN_HEIGHT // 2
+        self.trash_y = random.randint(0, SCREEN_HEIGHT) # Considera un rango menor si es muy dificil
+        self.trash_x = 800
+        self.obstacle_y = random.randint(0, SCREEN_HEIGHT) # Considera un rango menor si es muy dificil
+        # Para aumentar la variabilidad y dificultad gradual, podrías hacer que la X inicial del obstáculo varíe más
+        # o que aparezcan más cerca a medida que el agente mejora. Por ahora, lo dejamos así.
+        self.obstacle_x = random.choice([900, 1000, 1100, 1200, 1300]) # Un poco más de variedad en la X del obstáculo
+        self.steps_alive = 0
+        self.last_y = self.player_y
         self.same_y_count = 0
         return self.get_state()
 
     def get_state(self):
+        # La discretización actual es bastante granular. Si el agente tiene problemas,
+        # podrías probar con PLAYER_STEP más pequeño o una discretización más fina para X.
+        # Por ahora, la mantenemos.
         return (
-            self.player_y   // PLAYER_STEP,
-            self.trash_y    // PLAYER_STEP,
-            self.trash_x    // 100,
+            self.player_y // PLAYER_STEP,
+            self.trash_y // PLAYER_STEP,
+            self.trash_x // 100, # Discretización de X de la basura
             self.obstacle_y // PLAYER_STEP,
-            self.obstacle_x // 100
+            self.obstacle_x // 100 # Discretización de X del obstáculo
         )
 
     def step(self, action):
-        if action == 1:
+        if action == 1:  # Subir
             self.player_y -= PLAYER_STEP
-        elif action == 2:
+        elif action == 2:  # Bajar
             self.player_y += PLAYER_STEP
-        self.player_y = max(0, min(SCREEN_HEIGHT, self.player_y))
+        # action == 0 (nada) y action == 3 (disparar) no mueven al jugador verticalmente aquí.
+        
+        self.player_y = max(0, min(SCREEN_HEIGHT - PLAYER_STEP, self.player_y)) # Ajuste para que el jugador no se salga por abajo con su propia altura
 
-        self.trash_x    -= TRASH_SPEED
+        self.trash_x -= TRASH_SPEED
         self.obstacle_x -= TRASH_SPEED
         self.steps_alive += 1
 
@@ -74,26 +81,61 @@ class SimEnvironment:
         else:
             self.same_y_count = 0
         self.last_y = self.player_y
-
+        
         reward, done = 0, False
-        if action == 3 and abs(self.player_y - self.trash_y) <= 40 and self.trash_x < 120:
-            reward += 20
-            self.trash_x = 800
-            self.trash_y = random.randint(0, SCREEN_HEIGHT)
-        elif abs(self.player_y - self.obstacle_y) <= 40 and self.obstacle_x < 50:
-            reward, done = -30, True
-        elif self.trash_x < 0:
-            reward, done = -10, True
-        elif self.same_y_count >= 5:
-            reward -= 5
 
-        if self.steps_alive % 5 == 0:
-            reward += 1
+        # --- RECOMPENSAS Y PENALIZACIONES AJUSTADAS ---
+
+        # Objetivo Principal: Disparar Basura
+        # Hacemos esta recompensa más destacada.
+        if action == 3 and abs(self.player_y - self.trash_y) <= 40 and self.trash_x < 120:
+            reward += 50  # Aumentamos recompensa por disparar basura
+            self.trash_x = random.choice([750, 800, 850]) # Reset con ligera variabilidad
+            self.trash_y = random.randint(0, SCREEN_HEIGHT - PLAYER_STEP)
+            # Podríamos añadir un pequeño bonus por disparos rápidos o rachas, pero simplifiquemos por ahora.
+        
+        # Penalización Mayor: Chocar con Obstáculo
+        # Ya la tienes alta, lo cual es bueno.
+        elif abs(self.player_y - self.obstacle_y) <= 40 and self.obstacle_x < 50: # Asumimos que 40 es la mitad de la altura del jugador/obstáculo
+            reward, done = -100, True  # Mantenemos penalización alta
+            
+        # Penalización Secundaria: Basura se Escapa
+        # Ya la tienes considerable, lo cual está bien.
+        elif self.trash_x < 0:
+            reward, done = -25, True # Mantenemos penalización considerable, ligeramente ajustada
+            
+        # Penalización por Inactividad (quedarse en la misma Y)
+        # Esto ya lo tienes.
+        elif self.same_y_count >= 7: # Aumentamos ligeramente el umbral para no penalizar ajustes finos
+            reward -= 5  # Mantenemos penalización por inactividad
+            self.same_y_count = 0 # Resetear para que no penalice continuamente si la acción es no moverse.
+
+        # Penalización por Disparar al Vacío (NUEVO)
+        # Para desincentivar que el agente haga "spam" de disparos.
+        if action == 3 and not (abs(self.player_y - self.trash_y) <= 40 and self.trash_x < 120):
+            reward -= 2 # Pequeña penalización por disparar y fallar (o disparar sin objetivo claro)
+
+        # Bonus de Supervivencia (MODIFICADO SIGNIFICATIVAMENTE)
+        # Recompensa muy pequeña por cada paso, o una un poco mayor cada más pasos.
+        # La idea es que no compita con la recompensa de disparar basura.
+        # Opción 1: Pequeña recompensa por paso.
+        # reward += 0.1 # Recompensa muy pequeña por simplemente estar vivo.
+        # Opción 2: Recompensa modesta cada N pasos.
+        if self.steps_alive % 10 == 0: # Cada 10 pasos
+            reward += 1  # Recompensa de supervivencia mucho menor
+
+        # Asegurar que el episodio termine si alcanza el máximo de pasos (si no lo hace ya el bucle de entrenamiento)
+        if self.steps_alive >= MAX_STEPS_PER_EP and not done:
+            # done = True # Opcional: si quieres que termine aquí y reciba la recompensa acumulada.
+            # reward += 0 # O una pequeña recompensa/penalización por llegar al final.
+            pass
+
 
         return self.get_state(), reward, done
 
 # ——— ENTRENAMIENTO OFFLINE ———
 def train():
+
     # Inicializar agente y cargar Q-Table previa si existe
     agent = QLearningAgent(actions=ACTIONS, alpha=ALPHA, gamma=GAMMA, epsilon=EPSILON_START)
     if os.path.exists(QTABLE_PATH):
